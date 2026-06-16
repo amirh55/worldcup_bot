@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:640px;">
+    <h2>⚙️ ویرایش قوانین</h2>
+    <p>این متن در ربات وقتی کاربر روی «📜 قوانین» بزند نمایش داده می‌شود.</p>
+    <form method="post">
+        <textarea name="rules" rows="14">{{ rules }}</textarea>
+        <button type="submit" class="btn btn-blue">ذخیره قوانین</button>
+    </form>
+</div>
+{% endblock %}
