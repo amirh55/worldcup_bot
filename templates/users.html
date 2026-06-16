@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <h1>کاربران و رتبه‌بندی</h1>
+    <p>مجموع کاربران: <b>{{ users|length }}</b> — برای قرعه‌کشی از این لیست استفاده کن (به ترتیب امتیاز مرتب شده).</p>
+</div>
+<div class="card">
+    {% if users %}
+    <table>
+        <tr>
+            <th>رتبه</th><th>نام</th><th>شماره تماس</th>
+            <th>امتیاز</th><th>دعوت‌شده‌ها</th><th>کد رفرال</th>
+        </tr>
+        {% for u in users %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ u.full_name or '—' }}</td>
+            <td>{{ u.phone or '—' }}</td>
+            <td><b>{{ u.points }}</b></td>
+            <td>{{ u.referrals }}</td>
+            <td>{{ u.referral_code }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% else %}
+    <p>هنوز کاربری ثبت‌نام نکرده است.</p>
+    {% endif %}
+</div>
+{% endblock %}

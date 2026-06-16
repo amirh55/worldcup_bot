@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <h1>لیست بازی‌ها</h1>
+    <a href="{{ url_for('add_match') }}" class="btn btn-green">➕ افزودن بازی جدید</a>
+</div>
+<div class="card">
+    {% if matches %}
+    <table>
+        <tr>
+            <th>#</th><th>بازی</th><th>شروع پاسخ</th><th>پایان پاسخ</th>
+            <th>وضعیت</th><th>نتیجه</th><th>عملیات</th>
+        </tr>
+        {% for m in matches %}
+        <tr>
+            <td>{{ m.id }}</td>
+            <td>{{ m.team1 }} ⚔️ {{ m.team2 }}</td>
+            <td>{{ m.start_time }}</td>
+            <td>{{ m.close_time }}</td>
+            <td>
+                {% if m.status == 'فعال (در حال پاسخ‌دهی)' %}<span class="badge b-active">{{ m.status }}</span>
+                {% elif m.status == 'در انتظار شروع' %}<span class="badge b-wait">{{ m.status }}</span>
+                {% elif m.status == 'تمام‌شده' %}<span class="badge b-done">{{ m.status }}</span>
+                {% else %}<span class="badge b-closed">{{ m.status }}</span>{% endif %}
+            </td>
+            <td>
+                {% if m.result == 'win' %}برد {{ m.team1 }}
+                {% elif m.result == 'lose' %}باخت {{ m.team1 }}
+                {% else %}—{% endif %}
+            </td>
+            <td>
+                {% if not m.is_finished %}
+                <a href="{{ url_for('set_result', match_id=m.id) }}" class="btn btn-green">ثبت نتیجه</a>
+                <a href="{{ url_for('edit_match', match_id=m.id) }}" class="btn btn-blue">ویرایش</a>
+                {% endif %}
+                <form method="post" action="{{ url_for('delete_match', match_id=m.id) }}"
+                      style="display:inline;" onsubmit="return confirm('حذف شود؟');">
+                    <button class="btn btn-red">حذف</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% else %}
+    <p>هنوز بازی‌ای ثبت نشده است.</p>
+    {% endif %}
+</div>
+{% endblock %}

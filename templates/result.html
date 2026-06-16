@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:520px;">
+    <h2>ثبت نتیجه بازی</h2>
+    <p style="font-size:18px;">⚽ <b>{{ match.team1 }} ⚔️ {{ match.team2 }}</b></p>
+    <p style="color:#d93025;">⚠️ توجه: پس از ثبت نتیجه، امتیازها توزیع می‌شوند و
+       این بازی دیگر در ربات نمایش داده نمی‌شود. این عمل قابل بازگشت نیست.</p>
+    <form method="post" onsubmit="return confirm('از ثبت نتیجه مطمئنی؟');">
+        <label>نتیجه نهایی چه بود؟</label><br><br>
+        <label style="font-weight:normal;">
+            <input type="radio" name="result" value="win" required>
+            ✅ {{ match.team1 }} برنده شد (پاسخ «برد تیم اول» درست است)
+        </label><br><br>
+        <label style="font-weight:normal;">
+            <input type="radio" name="result" value="lose" required>
+            ❌ {{ match.team1 }} باخت (پاسخ «باخت تیم اول» درست است)
+        </label><br><br>
+        <button type="submit" class="btn btn-green">ثبت نتیجه و توزیع امتیاز</button>
+        <a href="{{ url_for('matches') }}" class="btn btn-gray">انصراف</a>
+    </form>
+</div>
+{% endblock %}
