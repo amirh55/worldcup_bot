@@ -13,6 +13,9 @@ from flask import (
 
 import config
 import database as db
+import requests
+import threading
+import time
 
 app = Flask(__name__)
 app.secret_key = config.PANEL_SECRET_KEY
@@ -166,6 +169,40 @@ def settings():
     rules = db.get_setting("rules") or ""
     return render_template("settings.html", rules=rules)
 
+# ---------- ارسال پیام همگانی ----------
+def _send_broadcast(text):
+    """در پس‌زمینه به همه کاربران پیام می‌فرستد."""
+    url = f"https://tapi.bale.ai/bot{config.BOT_TOKEN}/sendMessage"
+    user_ids = db.all_user_ids()
+    sent, failed = 0, 0
+    for uid in user_ids:
+        try:
+            r = requests.post(url, data={"chat_id": uid, "text": text}, timeout=10)
+            if r.ok and r.json().get("ok"):
+                sent += 1
+            else:
+                failed += 1
+        except Exception:
+            failed += 1
+        time.sleep(0.05)  # جلوگیری از فشار به سرور بله
+    print(f"📢 پیام همگانی: {sent} موفق، {failed} ناموفق")
+
+
+@app.route("/broadcast", methods=["GET", "POST"])
+@login_required
+def broadcast():
+    total_users = len(db.all_user_ids())
+    if request.method == "POST":
+        text = request.form.get("text", "").strip()
+        if not text:
+            flash("متن پیام خالی است.", "error")
+            return redirect(url_for("broadcast"))
+        # ارسال در پس‌زمینه تا صفحه قفل نشود
+        threading.Thread(target=_send_broadcast, args=(text,), daemon=True).start()
+        flash(f"📢 پیام در حال ارسال به {total_users} کاربر است... "
+              "(چند لحظه طول می‌کشد)", "ok")
+        return redirect(url_for("broadcast"))
+    return render_template("broadcast.html", total_users=total_users)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=config.PANEL_PORT)
