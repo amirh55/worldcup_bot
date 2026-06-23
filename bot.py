@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 """
 ربات گیمیفیکیشن جام جهانی ۲۰۲۶ برای پیام‌رسان بله.
-نسخه کامل و سازگار با بله.
+نسخه با زمان تهران، نفرات برتر، و بازگشت خودکار.
 """
 import random
 import string
 import time
 from datetime import datetime
 
+import pytz
 import telebot
 from telebot import apihelper
 from telebot.types import (
@@ -25,15 +26,20 @@ bot = telebot.TeleBot(config.BOT_TOKEN)
 
 db.init_db()
 
-# پشتیبانی از هر دو نام متغیر کانال در config
+# منطقه زمانی تهران
+TEHRAN_TZ = pytz.timezone("Asia/Tehran")
+
 CHANNEL = getattr(config, "REQUIRED_CHANNEL", None) or getattr(config, "CHANNEL_USERNAME", "")
-# یوزرنیم ربات بدون @
 BOT_USERNAME = getattr(config, "BOT_USERNAME", "").lstrip("@")
 
 
 # ============== ابزارهای کمکی ==============
+def tehran_now():
+    """زمان فعلی به وقت تهران (بدون اطلاعات منطقه زمانی، برای مقایسه)."""
+    return datetime.now(TEHRAN_TZ).replace(tzinfo=None)
+
+
 def gen_refcode():
-    """ساخت یک کد رفرال یکتا."""
     while True:
         code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
         if not db.get_user_by_refcode(code):
@@ -41,7 +47,6 @@ def gen_refcode():
 
 
 def is_member(user_id):
-    """چک عضویت کاربر در کانال اجباری."""
     try:
         member = bot.get_chat_member(CHANNEL, user_id)
         return member.status in ("member", "administrator", "creator")
@@ -53,8 +58,8 @@ def is_member(user_id):
 def main_menu():
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
     kb.row(KeyboardButton("🏆 جام جهانی"))
-    kb.row(KeyboardButton("🏅 امتیاز من"), KeyboardButton("👥 دعوت دوستان"))
-    kb.row(KeyboardButton("📜 قوانین"))
+    kb.row(KeyboardButton("🏅 امتیاز من"), KeyboardButton("🏅 نفرات برتر"))
+    kb.row(KeyboardButton("👥 دعوت دوستان"), KeyboardButton("📜 قوانین"))
     return kb
 
 
@@ -84,6 +89,19 @@ def get_state(user_id):
     return user["state"] if user else None
 
 
+def matches_keyboard():
+    """کیبورد لیست بازی‌های فعال."""
+    matches = db.active_matches()
+    if not matches:
+        return None
+    kb = InlineKeyboardMarkup()
+    for m in matches:
+        kb.add(InlineKeyboardButton(
+            f"{m['team1']} ⚔️ {m['team2']}",
+            callback_data=f"match_{m['id']}"))
+    return kb
+
+
 # ============== استارت ==============
 @bot.message_handler(commands=["start"])
 def cmd_start(message):
@@ -92,7 +110,6 @@ def cmd_start(message):
     args = message.text.split()
     referred_by = None
 
-    # بررسی کد رفرال در لینک استارت:  /start REF_CODE
     if len(args) > 1:
         ref = db.get_user_by_refcode(args[1].strip())
         if ref and ref["user_id"] != user_id:
@@ -135,6 +152,7 @@ def cmd_help(message):
         "از دکمه‌های پایین صفحه استفاده کن:\n"
         "🏆 جام جهانی - دیدن بازی‌ها و پیش‌بینی\n"
         "🏅 امتیاز من - مشاهده امتیاز\n"
+        "🏅 نفرات برتر - جدول ۱۰ نفر اول\n"
         "👥 دعوت دوستان - گرفتن لینک دعوت\n"
         "📜 قوانین - قوانین مسابقه")
 
@@ -174,7 +192,6 @@ def cb_check_join(call):
     chat_id = call.message.chat.id
     if is_member(uid):
         user = db.get_user(uid)
-        # امتیاز رفرال (فقط یک‌بار، هنگام تکمیل ثبت‌نام)
         if user and user["referred_by"] and user["state"] != "done":
             db.add_points(user["referred_by"], config.POINTS_REFERRAL)
             try:
@@ -201,7 +218,6 @@ def cb_check_join(call):
 
 # ============== گارد عضویت ==============
 def ensure_ready(message):
-    """بررسی کامل بودن ثبت‌نام و عضویت. اگر نه، مرحله مناسب نمایش داده می‌شود."""
     user_id = message.from_user.id
     chat_id = message.chat.id
     user = db.get_user(user_id)
@@ -241,6 +257,26 @@ def show_points(message):
         f"👥 تعداد دوستان دعوت‌شده: {refs}")
 
 
+# ============== دکمه: نفرات برتر ==============
+@bot.message_handler(func=lambda m: m.text == "🏅 نفرات برتر")
+def show_top(message):
+    if not ensure_ready(message):
+        return
+    tops = db.top_users(10)
+    if not tops:
+        bot.send_message(message.chat.id,
+            "🏆 هنوز کسی امتیازی کسب نکرده است.\nاولین نفر باش! ⚽")
+        return
+
+    medals = ["🥇", "🥈", "🥉"]
+    lines = ["🏆 جدول ۱۰ نفر برتر:\n"]
+    for i, u in enumerate(tops):
+        rank = medals[i] if i < 3 else f"{i + 1}."
+        name = u["full_name"] or "بدون نام"
+        lines.append(f"{rank} {name} — {u['points']} امتیاز")
+    bot.send_message(message.chat.id, "\n".join(lines))
+
+
 # ============== دکمه: دعوت دوستان ==============
 @bot.message_handler(func=lambda m: m.text == "👥 دعوت دوستان")
 def show_referral(message):
@@ -272,17 +308,11 @@ def show_worldcup(message):
         "یکی از بازی‌های زیر را انتخاب کن:"
     )
 
-    matches = db.active_matches()
-    if not matches:
+    kb = matches_keyboard()
+    if kb is None:
         bot.send_message(message.chat.id,
             intro + "\n\n⏳ در حال حاضر بازی فعالی وجود ندارد. بعداً سر بزن!")
         return
-
-    kb = InlineKeyboardMarkup()
-    for m in matches:
-        kb.add(InlineKeyboardButton(
-            f"{m['team1']} ⚔️ {m['team2']}",
-            callback_data=f"match_{m['id']}"))
     bot.send_message(message.chat.id, intro, reply_markup=kb)
 
 
@@ -298,7 +328,7 @@ def cb_match(call):
         bot.answer_callback_query(call.id, "این بازی دیگر در دسترس نیست.", show_alert=True)
         return
 
-    now = datetime.now()
+    now = tehran_now()
     start = parse_dt(m["start_time"])
     close = parse_dt(m["close_time"])
 
@@ -329,10 +359,36 @@ def cb_match(call):
         InlineKeyboardButton(f"✅ {m['team1']} برنده می‌شود", callback_data=f"ans_{match_id}_win"),
         InlineKeyboardButton(f"❌ {m['team1']} می‌بازد", callback_data=f"ans_{match_id}_lose"),
     )
+    kb.add(InlineKeyboardButton("🔙 بازگشت به لیست بازی‌ها", callback_data="back_matches"))
     try:
         bot.edit_message_text(text, chat_id, call.message.message_id, reply_markup=kb)
     except Exception:
         bot.send_message(chat_id, text, reply_markup=kb)
+    bot.answer_callback_query(call.id)
+
+
+# ============== بازگشت به لیست بازی‌ها ==============
+@bot.callback_query_handler(func=lambda c: c.data == "back_matches")
+def cb_back_matches(call):
+    chat_id = call.message.chat.id
+    intro = (
+        "🏆 پیش‌بینی بازی‌های جام جهانی ۲۰۲۶\n\n"
+        "یکی از بازی‌های زیر را انتخاب کن:"
+    )
+    kb = matches_keyboard()
+    if kb is None:
+        try:
+            bot.edit_message_text(
+                intro + "\n\n⏳ در حال حاضر بازی فعالی وجود ندارد.",
+                chat_id, call.message.message_id)
+        except Exception:
+            pass
+        bot.answer_callback_query(call.id)
+        return
+    try:
+        bot.edit_message_text(intro, chat_id, call.message.message_id, reply_markup=kb)
+    except Exception:
+        bot.send_message(chat_id, intro, reply_markup=kb)
     bot.answer_callback_query(call.id)
 
 
@@ -349,7 +405,7 @@ def cb_answer(call):
         bot.answer_callback_query(call.id, "این بازی دیگر در دسترس نیست.", show_alert=True)
         return
 
-    now = datetime.now()
+    now = tehran_now()
     start = parse_dt(m["start_time"])
     close = parse_dt(m["close_time"])
     if start and now < start:
@@ -361,23 +417,29 @@ def cb_answer(call):
 
     db.save_prediction(uid, match_id, answer)
     a = "برد تیم اول" if answer == "win" else "باخت تیم اول"
-    bot.answer_callback_query(call.id, f"پاسخ تو ثبت شد: {a} ✅", show_alert=True)
 
-    text = (
-        f"⚽ {m['team1']} ⚔️ {m['team2']}\n\n"
-        f"✅ پاسخ تو ثبت شد: {a}\n"
-        f"⏰ تا {m['close_time']} می‌توانی تغییر دهی.\n\n"
-        "موفق باشی! 🍀"
+    # پیام موفقیت به‌صورت پاپ‌آپ
+    bot.answer_callback_query(call.id,
+        f"✅ پاسخ تو ثبت شد: {a}", show_alert=True)
+
+    # بازگشت خودکار به لیست بازی‌ها
+    intro = (
+        f"✅ پاسخت برای بازی «{m['team1']} ⚔️ {m['team2']}» ثبت شد: {a}\n\n"
+        "🏆 می‌توانی بازی بعدی را هم پیش‌بینی کنی:"
     )
-    kb = InlineKeyboardMarkup()
-    kb.add(
-        InlineKeyboardButton(f"✅ {m['team1']} برنده می‌شود", callback_data=f"ans_{match_id}_win"),
-        InlineKeyboardButton(f"❌ {m['team1']} می‌بازد", callback_data=f"ans_{match_id}_lose"),
-    )
+    kb = matches_keyboard()
+    if kb is None:
+        try:
+            bot.edit_message_text(
+                f"✅ پاسخت ثبت شد: {a}\n\nفعلاً بازی دیگری برای پیش‌بینی نیست.",
+                chat_id, call.message.message_id)
+        except Exception:
+            pass
+        return
     try:
-        bot.edit_message_text(text, chat_id, call.message.message_id, reply_markup=kb)
+        bot.edit_message_text(intro, chat_id, call.message.message_id, reply_markup=kb)
     except Exception:
-        pass
+        bot.send_message(chat_id, intro, reply_markup=kb)
 
 
 # ============== پیام‌های متفرقه ==============
