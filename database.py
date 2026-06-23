@@ -216,6 +216,22 @@ def award_match_points(match_id, result, points):
         conn.commit()
     return winners
 
+# ---------- نفرات برتر ----------
+def top_users(limit=10):
+    """لیست نفرات برتر بر اساس امتیاز (فقط کاربرانی که ثبت‌نام کامل کرده‌اند)."""
+    with _lock, get_conn() as conn:
+        rows = conn.execute(
+            "SELECT full_name, points FROM users "
+            "WHERE state='done' AND points > 0 "
+            "ORDER BY points DESC LIMIT ?", (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def all_user_ids():
+    """شناسه همه کاربرانی که ثبت‌نام کامل کرده‌اند (برای پیام همگانی)."""
+    with _lock, get_conn() as conn:
+        rows = conn.execute("SELECT user_id FROM users WHERE state='done'").fetchall()
+        return [r["user_id"] for r in rows]
 
 # ---------- تنظیمات متنی ----------
 def get_setting(key):
