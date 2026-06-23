@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:640px;">
+    <h2>📢 ارسال پیام همگانی</h2>
+    <p>این پیام به تمام <b>{{ total_users }}</b> کاربر ثبت‌نام‌شده ربات ارسال می‌شود.</p>
+    <form method="post" onsubmit="return confirm('پیام به همه کاربران ارسال شود؟');">
+        <label>متن پیام</label>
+        <textarea name="text" rows="8" placeholder="متن اطلاع‌رسانی خود را بنویس..." required></textarea>
+        <button type="submit" class="btn btn-blue">📤 ارسال به همه</button>
+    </form>
+    <p style="color:#946c00;font-size:13px;margin-top:14px;">
+        ⚠️ ارسال به همه کاربران ممکن است چند دقیقه طول بکشد.
+        پس از کلیک، صفحه را نبند؛ ارسال در پس‌زمینه ادامه می‌یابد.
+    </p>
+</div>
+{% endblock %}
